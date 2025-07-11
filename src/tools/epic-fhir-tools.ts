@@ -25,8 +25,8 @@ export class EpicFHIRTools {
   // Tool 1: Search Patients
   createSearchPatientsTool(): Tool {
     return {
-      name: 'searchPatients',
-      description: 'Search for patients in Epic FHIR by name, identifier, or other criteria',
+      name: 'epicSearchPatients',
+      description: 'Search for in Epic FHIR by name, identifier, or other criteria',
       inputSchema: {
         type: 'object',
         properties: {
@@ -155,7 +155,7 @@ export class EpicFHIRTools {
   // Tool 2: Get Patient Details
   createGetPatientTool(): Tool {
     return {
-      name: 'getPatientDetails',
+      name: 'epicGetPatientDetails',
       description: 'Get detailed information for a specific patient by ID',
       inputSchema: {
         type: 'object',
@@ -211,7 +211,7 @@ export class EpicFHIRTools {
   // Tool 3: Get Patient Observations
   createGetObservationsTool(): Tool {
     return {
-      name: 'getPatientObservations',
+      name: 'epicGetPatientObservations',
       description: 'Get lab results, vitals, and other observations for a patient',
       inputSchema: {
         type: 'object',
@@ -318,7 +318,7 @@ export class EpicFHIRTools {
   // Tool 4: Get Patient Medications
   createGetMedicationsTool(): Tool {
     return {
-      name: 'getPatientMedications',
+      name: 'epicGetPatientMedications',
       description: 'Get current and past medications for a patient',
       inputSchema: {
         type: 'object',
@@ -412,7 +412,7 @@ export class EpicFHIRTools {
   // Tool 5: Get Patient Conditions
   createGetConditionsTool(): Tool {
     return {
-      name: 'getPatientConditions',
+      name: 'epicGetPatientConditions',
       description: 'Get medical conditions and diagnoses for a patient',
       inputSchema: {
         type: 'object',
@@ -515,7 +515,7 @@ export class EpicFHIRTools {
   // Tool 6: Get Patient Encounters
   createGetEncountersTool(): Tool {
     return {
-      name: 'getPatientEncounters',
+      name: 'epicGetPatientEncounters',
       description: 'Get healthcare encounters/visits for a patient',
       inputSchema: {
         type: 'object',
