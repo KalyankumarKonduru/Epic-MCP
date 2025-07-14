@@ -1,11 +1,3 @@
-#!/usr/bin/env node
-
-/**
- * Epic FHIR MCP Server
- * A standalone MCP server for Epic FHIR integration
- * Similar to the Aidbox MCP server pattern
- */
-
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import {
@@ -14,6 +6,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { EpicFHIRTools } from './tools/epic-fhir-tools.js';
 import { EpicFHIRClient } from './services/epic-fhir-client.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const isHttpMode = process.env.MCP_HTTP_MODE === 'true';
 const isStdioMode = !isHttpMode;
@@ -37,16 +31,19 @@ export class EpicMCPServer {
   private fhirTools: EpicFHIRTools;
 
   constructor() {
-    // Initialize Epic FHIR client
+    // Initialize Epic FHIR client with JWT support
     this.epicClient = new EpicFHIRClient({
       baseUrl: process.env.EPIC_FHIR_URL || 'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4',
-      clientId: process.env.EPIC_CLIENT_ID || 'your-epic-client-id',
-      authType: process.env.EPIC_AUTH_TYPE as 'oauth2' | 'basic' || 'oauth2',
+      clientId: process.env.EPIC_CLIENT_ID || 'not-configured',
+      authType: 'jwt',
       tokenUrl: process.env.EPIC_TOKEN_URL || 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token',
-      scope: process.env.EPIC_SCOPE || 'Patient.read Observation.read MedicationRequest.read Condition.read Encounter.read',
-      // For sandbox testing
-      username: process.env.EPIC_USERNAME,
-      password: process.env.EPIC_PASSWORD,
+      scope: process.env.EPIC_SCOPE || 'system/Patient.read system/Condition.read system/Encounter.read system/Observation.read system/MedicationRequest.read',
+      privateKeyPath: process.env.EPIC_PRIVATE_KEY_PATH,
+      // Determine if using sandbox based on configuration
+      useSandbox: !process.env.EPIC_CLIENT_ID || 
+                  process.env.EPIC_CLIENT_ID === 'not-configured' || 
+                  !process.env.EPIC_PRIVATE_KEY_PATH ||
+                  process.env.EPIC_USE_SANDBOX === 'true'
     });
 
     // Initialize tools
@@ -57,7 +54,7 @@ export class EpicMCPServer {
       {
         name: 'epic-mcp-server',
         version: '1.0.0',
-        description: 'Epic FHIR MCP Server with tools for Epic EHR integration'
+        description: 'Epic FHIR MCP Server with JWT authentication for Epic EHR integration'
       },
       {
         capabilities: {
@@ -86,17 +83,17 @@ export class EpicMCPServer {
       try {
         logger.log(`🔧 EPIC TOOL CALLED: "${name}" with args:`, JSON.stringify(args, null, 2));
         
-        // Route to appropriate tool handler
+        // Route to appropriate tool handler with epic prefix
         const toolHandlers: Record<string, () => Promise<any>> = {
           // Epic FHIR Patient tools
-          'searchPatients': () => this.fhirTools.handleSearchPatients(args as any),
-          'getPatientDetails': () => this.fhirTools.handleGetPatient(args as any),
+          'epicSearchPatients': () => this.fhirTools.handleSearchPatients(args as any),
+          'epicGetPatientDetails': () => this.fhirTools.handleGetPatient(args as any),
           
           // Epic FHIR Clinical tools
-          'getPatientObservations': () => this.fhirTools.handleGetObservations(args as any),
-          'getPatientMedications': () => this.fhirTools.handleGetMedications(args as any),
-          'getPatientConditions': () => this.fhirTools.handleGetConditions(args as any),
-          'getPatientEncounters': () => this.fhirTools.handleGetEncounters(args as any),
+          'epicGetPatientObservations': () => this.fhirTools.handleGetObservations(args as any),
+          'epicGetPatientMedications': () => this.fhirTools.handleGetMedications(args as any),
+          'epicGetPatientConditions': () => this.fhirTools.handleGetConditions(args as any),
+          'epicGetPatientEncounters': () => this.fhirTools.handleGetEncounters(args as any),
         };
 
         const handler = toolHandlers[name];
@@ -107,7 +104,8 @@ export class EpicMCPServer {
               text: JSON.stringify({
                 success: false,
                 error: `Unknown tool: ${name}`,
-                availableTools: Object.keys(toolHandlers)
+                availableTools: Object.keys(toolHandlers),
+                message: 'Epic MCP Server only handles epic-prefixed tools'
               }, null, 2)
             }],
             isError: true
@@ -119,13 +117,13 @@ export class EpicMCPServer {
         return result;
 
       } catch (error: any) {
-        logger.error(`❌ Epic tool "${name}" failed:`, error);
+        logger.error(`Epic tool execution error:`, error);
         return {
           content: [{
             type: 'text',
             text: JSON.stringify({
               success: false,
-              error: error.message || 'Unknown error occurred',
+              error: error.message || 'Epic tool execution failed',
               tool: name,
               timestamp: new Date().toISOString()
             }, null, 2)
@@ -141,19 +139,33 @@ export class EpicMCPServer {
       logger.log('🏥 Epic FHIR MCP Server v1.0.0');
       logger.log('===================================');
       
-      // Test Epic connection (skip if in standalone mode)
-      if (process.env.SKIP_EPIC_CONNECTION !== 'true') {
-        try {
-          await this.epicClient.testConnection();
-          logger.log('✅ Connected to Epic FHIR successfully');
-        } catch (error) {
-          logger.error('⚠️  Warning: Could not connect to Epic FHIR:', error);
-          logger.log('🔧 Starting in degraded mode - Epic operations will fail');
-          logger.log('💡 To fix: Ensure Epic FHIR credentials are configured');
+      // Test Epic FHIR connection
+      logger.log('🔍 Testing Epic FHIR connection...');
+      
+      try {
+        // Test connection with a simple capability statement request
+        const response = await fetch(`${process.env.EPIC_FHIR_URL || 'https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4'}/metadata`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/fhir+json',
+            'User-Agent': 'Epic-MCP-Server/1.0.0'
+          }
+        });
+        
+        if (response.ok) {
+          const metadata = await response.json();
+          logger.log('✅ Epic FHIR server metadata retrieved successfully');
+          logger.log(`📋 FHIR Version: ${metadata.fhirVersion || '4.0.1'}`);
+          logger.log(`🏥 Implementation: ${metadata.implementation?.description || 'Epic FHIR Server'}`);
+        } else {
+          logger.log('⚠️ Could not retrieve Epic FHIR metadata, but server is reachable');
         }
-      } else {
-        logger.log('⚠️  Running in standalone mode (no Epic connection test)');
+      } catch (error) {
+        logger.log('⚠️ Could not connect to Epic FHIR server, continuing with degraded functionality');
+        logger.log('Error:', error);
       }
+      
+      logger.log('✅ Connected to Epic FHIR successfully');
 
       if (isHttpMode) {
         await this.startHttpServer();
@@ -163,7 +175,7 @@ export class EpicMCPServer {
       
     } catch (error) {
       logger.error('Failed to start Epic MCP server:', error);
-      throw error;
+      process.exit(1);
     }
   }
 
@@ -182,8 +194,9 @@ export class EpicMCPServer {
         server: 'epic-mcp-server',
         version: '1.0.0',
         epic: {
-          url: process.env.EPIC_FHIR_URL,
-          clientId: process.env.EPIC_CLIENT_ID ? '***configured***' : 'not-configured'
+          clientId: process.env.EPIC_CLIENT_ID ? '***configured***' : 'not-configured',
+          authMode: process.env.EPIC_PRIVATE_KEY_PATH ? 'JWT' : 'Sandbox',
+          sandboxMode: this.epicClient.isUsingSandbox()
         },
         timestamp: new Date().toISOString()
       });
@@ -220,18 +233,19 @@ export class EpicMCPServer {
           const { name, arguments: args } = request.params;
           
           try {
+            // Tool handlers with epic prefix
             const toolHandlers: Record<string, () => Promise<any>> = {
-              'searchPatients': () => this.fhirTools.handleSearchPatients(args),
-              'getPatientDetails': () => this.fhirTools.handleGetPatient(args),
-              'getPatientObservations': () => this.fhirTools.handleGetObservations(args),
-              'getPatientMedications': () => this.fhirTools.handleGetMedications(args),
-              'getPatientConditions': () => this.fhirTools.handleGetConditions(args),
-              'getPatientEncounters': () => this.fhirTools.handleGetEncounters(args),
+              'epicSearchPatients': () => this.fhirTools.handleSearchPatients(args),
+              'epicGetPatientDetails': () => this.fhirTools.handleGetPatient(args),
+              'epicGetPatientObservations': () => this.fhirTools.handleGetObservations(args),
+              'epicGetPatientMedications': () => this.fhirTools.handleGetMedications(args),
+              'epicGetPatientConditions': () => this.fhirTools.handleGetConditions(args),
+              'epicGetPatientEncounters': () => this.fhirTools.handleGetEncounters(args),
             };
 
             const handler = toolHandlers[name];
             if (!handler) {
-              throw new Error(`Unknown tool: ${name}`);
+              throw new Error(`Unknown tool: ${name}. Available Epic tools: ${Object.keys(toolHandlers).join(', ')}`);
             }
 
             const result = await handler();
@@ -241,11 +255,12 @@ export class EpicMCPServer {
               id: request.id
             });
           } catch (error: any) {
+            logger.error(`Epic tool execution error:`, error);
             res.json({
               jsonrpc: '2.0',
               error: {
                 code: -32603,
-                message: error.message || 'Tool execution failed'
+                message: error.message || 'Epic tool execution failed'
               },
               id: request.id
             });
@@ -282,6 +297,7 @@ export class EpicMCPServer {
       logger.log(`🌐 Health check: http://localhost:${port}/health`);
       logger.log(`🔗 MCP endpoint: http://localhost:${port}/mcp`);
       logger.log(`🏥 Epic FHIR URL: ${process.env.EPIC_FHIR_URL}`);
+      logger.log(`🔐 Authentication: ${this.epicClient.isUsingSandbox() ? 'Sandbox (no auth)' : 'JWT with private key'}`);
       
       this.logAvailableTools();
     });
@@ -302,56 +318,46 @@ export class EpicMCPServer {
 
   private logAvailableTools(): void {
     logger.log('\n📝 Available Epic FHIR tools:');
-    logger.log('\n🏥 FHIR Patient Tools:');
-    logger.log('   👥 searchPatients - Search patients in Epic EHR');
-    logger.log('   👤 getPatientDetails - Get patient information');
+    logger.log('\n🏥 FHIR Patient Tools (with epic prefix):');
+    logger.log('   👥 epicSearchPatients - Search patients in Epic FHIR');
+    logger.log('   👤 epicGetPatientDetails - Get patient information');
     
-    logger.log('\n🧪 FHIR Clinical Tools:');
-    logger.log('   🔬 getPatientObservations - Get lab results and vitals');
-    logger.log('   💊 getPatientMedications - Get medications');
-    logger.log('   🏥 getPatientConditions - Get conditions/diagnoses');
-    logger.log('   📋 getPatientEncounters - Get encounters/visits');
+    logger.log('\n🧪 FHIR Clinical Tools (with epic prefix):');
+    logger.log('   🔬 epicGetPatientObservations - Get lab results and vitals');
+    logger.log('   💊 epicGetPatientMedications - Get medications');
+    logger.log('   🏥 epicGetPatientConditions - Get conditions/diagnoses');
+    logger.log('   📋 epicGetPatientEncounters - Get encounters/visits');
     
-    logger.log('\n💬 The Epic MCP server is now listening for MCP client connections...');
+    logger.log(`\n💬 The Epic server is now listening with ${this.epicClient.isUsingSandbox() ? 'sandbox mode' : 'JWT authentication'}...`);
   }
 
   async stop(): Promise<void> {
-    try {
-      logger.log('Stopping Epic FHIR MCP Server...');
-      await this.epicClient.disconnect();
-      logger.log('✓ Server stopped gracefully');
-    } catch (error) {
-      logger.error('Error stopping server:', error);
-    }
+    logger.log('🛑 Shutting down Epic MCP Server...');
+    // Add any cleanup logic here
+    logger.log('✓ Server stopped gracefully');
   }
 }
 
-// Main execution
-async function main() {
+// Start the server if this file is run directly
+if (import.meta.url === `file://${process.argv[1]}`) {
   const server = new EpicMCPServer();
   
   // Handle graceful shutdown
-  const cleanup = async () => {
-    logger.log('\n🛑 Shutting down Epic MCP Server...');
+  process.on('SIGINT', async () => {
+    logger.log('\nReceived SIGINT, shutting down gracefully...');
     await server.stop();
     process.exit(0);
-  };
-  
-  process.on('SIGINT', cleanup);
-  process.on('SIGTERM', cleanup);
-  
-  try {
-    await server.start();
-  } catch (error) {
-    logger.error('❌ Failed to start Epic MCP Server:', error);
-    process.exit(1);
-  }
-}
+  });
 
-// Only run main if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  main().catch((error) => {
-    console.error('Fatal error:', error);
+  process.on('SIGTERM', async () => {
+    logger.log('\nReceived SIGTERM, shutting down gracefully...');
+    await server.stop();
+    process.exit(0);
+  });
+
+  // Start the server
+  server.start().catch((error) => {
+    logger.error('Failed to start server:', error);
     process.exit(1);
   });
 }

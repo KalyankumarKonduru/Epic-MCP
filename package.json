@@ -1,53 +1,61 @@
 {
-    "name": "epic-mcp-server",
-    "version": "1.0.0",
-    "description": "Standalone MCP server for Epic FHIR integration",
-    "type": "module",
-    "main": "dist/server.js",
-    "bin": {
-      "epic-mcp-server": "./dist/server.js"
-    },
-    "scripts": {
-      "build": "tsc",
-      "start": "node dist/server.js",
-      "start:http": "MCP_HTTP_MODE=true node dist/server.js",
-      "start:stdio": "node dist/server.js",
-      "dev": "tsc --watch & nodemon dist/server.js",
-      "dev:http": "MCP_HTTP_MODE=true tsc --watch & nodemon dist/server.js",
-      "clean": "rm -rf dist",
-      "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "keywords": [
-      "epic",
-      "fhir",
-      "mcp",
-      "healthcare",
-      "ehr",
-      "medical"
-    ],
-    "author": "Your Name",
-    "license": "MIT",
-    "dependencies": {
-      "@modelcontextprotocol/sdk": "^0.5.0",
-      "express": "^4.18.2",
-      "cors": "^2.8.5"
-    },
-    "devDependencies": {
-      "@types/node": "^20.0.0",
-      "@types/express": "^4.17.17",
-      "@types/cors": "^2.8.13",
-      "typescript": "^5.0.0",
-      "nodemon": "^3.0.0"
-    },
-    "engines": {
-      "node": ">=18.0.0"
-    },
-    "repository": {
-      "type": "git",
-      "url": "https://github.com/your-username/epic-mcp-server.git"
-    },
-    "bugs": {
-      "url": "https://github.com/your-username/epic-mcp-server/issues"
-    },
-    "homepage": "https://github.com/your-username/epic-mcp-server#readme"
-  }
+  "name": "epic-mcp-server",
+  "version": "1.0.0",
+  "description": "Standalone MCP server for Epic FHIR integration with JWT authentication",
+  "type": "module",
+  "main": "dist/server.js",
+  "bin": {
+    "epic-mcp-server": "./dist/server.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "start:http": "MCP_HTTP_MODE=true node dist/server.js",
+    "start:stdio": "node dist/server.js",
+    "dev": "tsc --watch & nodemon dist/server.js",
+    "dev:http": "MCP_HTTP_MODE=true tsc --watch & nodemon dist/server.js",
+    "clean": "rm -rf dist",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "test-jwt": "node test-epic-jwt.js"
+  },
+  "keywords": [
+    "epic",
+    "fhir",
+    "mcp",
+    "healthcare",
+    "ehr",
+    "medical",
+    "jwt",
+    "authentication"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.5.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.0",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.13",
+    "@types/express": "^4.17.17",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^20.0.0",
+    "@types/uuid": "^9.0.8",
+    "nodemon": "^3.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/epic-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-username/epic-mcp-server/issues"
+  },
+  "homepage": "https://github.com/your-username/epic-mcp-server#readme"
+}

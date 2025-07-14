@@ -3,3 +3,5 @@ dist/
 *.log
 *.lock
 .env
+keys/
+test-epic-jwt.sh
