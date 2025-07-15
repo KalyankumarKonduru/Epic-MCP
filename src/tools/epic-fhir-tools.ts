@@ -63,94 +63,152 @@ export class EpicFHIRTools {
     };
   }
 
-  async handleSearchPatients(args: {
-    name?: string;
-    identifier?: string;
-    birthdate?: string;
-    gender?: string;
-    active?: boolean;
-    limit?: number;
-  }): Promise<any> {
-    try {
-      const searchParams: Record<string, string> = {};
-      
-      if (args.name) searchParams.name = args.name;
-      if (args.identifier) searchParams.identifier = args.identifier;
-      if (args.birthdate) searchParams.birthdate = args.birthdate;
-      if (args.gender) searchParams.gender = args.gender;
-      if (args.active !== undefined) searchParams.active = args.active.toString();
-      
-      searchParams._count = (args.limit || 10).toString();
-      searchParams._sort = 'family';
+// Add this debug code to your handleSearchPatients method in epic-fhir-tools.ts
 
-      const response = await this.client.searchResource('Patient', searchParams);
+// Update your handleSearchPatients method in epic-fhir-tools.ts
+
+async handleSearchPatients(args: {
+  name?: string;
+  identifier?: string;
+  birthdate?: string;
+  gender?: string;
+  active?: boolean;
+  limit?: number;
+}): Promise<any> {
+  try {
+    const searchParams: Record<string, string> = {};
+    
+    if (args.name) searchParams.name = args.name;
+    if (args.identifier) searchParams.identifier = args.identifier;
+    if (args.birthdate) searchParams.birthdate = args.birthdate;
+    if (args.gender) searchParams.gender = args.gender;
+    if (args.active !== undefined) searchParams.active = args.active.toString();
+    
+    // Set count limit (Epic supports this)
+    searchParams._count = (args.limit || 10).toString();
+    
+    // REMOVE THIS LINE - Epic doesn't support _sort for Patient search
+    // searchParams._sort = 'family';  // ❌ Remove this!
+
+    console.log('🔍 Epic Search Parameters:', JSON.stringify(searchParams, null, 2));
+
+    const response = await this.client.searchResource('Patient', searchParams);
+    
+    console.log('🔍 Full Epic Response:', JSON.stringify(response, null, 2));
+    console.log('🔍 Response Type:', response.resourceType);
+    console.log('🔍 Total Results:', response.total);
+    console.log('🔍 Entry Count:', response.entry?.length || 0);
+    
+    // Check for Epic issues (OperationOutcome)
+    if (response.entry && response.entry.length > 0) {
+      const hasOperationOutcome = response.entry.some((entry: any) => 
+        entry.resource?.resourceType === 'OperationOutcome'
+      );
       
-      if (!response.entry || response.entry.length === 0) {
-        // If no results and using sandbox, provide known patients
-        if (this.client.isUsingSandbox()) {
-          const knownPatients = this.client.getKnownSandboxPatients();
+      if (hasOperationOutcome) {
+        console.log('⚠️ Epic returned OperationOutcome - checking for actual patient data...');
+        
+        // Filter out OperationOutcome entries to find actual patients
+        const patientEntries = response.entry.filter((entry: any) => 
+          entry.resource?.resourceType === 'Patient'
+        );
+        
+        if (patientEntries.length === 0) {
+          console.log('❌ No actual patient data found, only OperationOutcome');
+          
+          // Extract issues for user feedback
+          const issues = response.entry
+            .filter((entry: any) => entry.resource?.resourceType === 'OperationOutcome')
+            .flatMap((entry: any) => entry.resource?.issue || []);
+          
           return {
             content: [{
               type: 'text',
               text: JSON.stringify({
-                success: true,
-                message: 'No patients found with search criteria. Here are known Epic sandbox patients:',
-                patientsFound: knownPatients.length,
-                patients: knownPatients.map(p => ({
-                  id: p.id,
-                  name: p.name,
-                  mrn: p.mrn,
-                  active: true,
-                  source: 'Epic Sandbox'
-                }))
+                success: false,
+                message: 'No patients found matching the search criteria',
+                epicIssues: issues.map((issue: any) => ({
+                  severity: issue.severity,
+                  code: issue.code,
+                  details: issue.details?.text,
+                  diagnostics: issue.diagnostics
+                })),
+                searchParams,
+                suggestion: 'Try searching with a different name or check spelling'
               }, null, 2)
             }]
           };
         }
-
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              success: true,
-              message: 'No patients found matching the search criteria',
-              patientsFound: 0,
-              patients: []
-            }, null, 2)
-          }]
-        };
+        
+        // Process actual patient entries
+        response.entry = patientEntries;
       }
-
-      const patients = response.entry.map((entry: any) => {
-        const patient = entry.resource;
-        return {
-          id: patient.id,
-          name: this.formatPatientName(patient.name),
-          birthDate: patient.birthDate,
-          gender: patient.gender,
-          active: patient.active,
-          mrn: this.extractMRN(patient.identifier),
-          phone: this.extractPhone(patient.telecom),
-          email: this.extractEmail(patient.telecom),
-          address: this.formatAddress(patient.address)
-        };
-      });
-
+    }
+    
+    if (!response.entry || response.entry.length === 0 || response.total === 0) {
       return {
         content: [{
           type: 'text',
           text: JSON.stringify({
-            success: true,
-            patientsFound: patients.length,
-            patients,
-            source: 'Epic FHIR'
+            success: false,
+            message: 'No patients found matching the search criteria',
+            patientsFound: 0,
+            patients: [],
+            searchParams,
+            suggestion: 'Try searching for known test patients like "Camila Lopez" or "Jason Argonaut"'
           }, null, 2)
         }]
       };
-    } catch (error) {
-      return this.handleError('searchPatients', error);
     }
+
+    console.log('✅ Processing Epic patient entries...');
+    
+    const patients = response.entry.map((entry: any, index: number) => {
+      const patient = entry.resource;
+      
+      // Skip OperationOutcome entries
+      if (patient.resourceType !== 'Patient') {
+        return null;
+      }
+      
+      console.log(`🔍 Processing patient ${index + 1}:`, {
+        id: patient.id,
+        name: patient.name,
+        active: patient.active
+      });
+      
+      return {
+        id: patient.id,
+        name: this.formatPatientName(patient.name),
+        birthDate: patient.birthDate,
+        gender: patient.gender,
+        active: patient.active,
+        mrn: this.extractMRN(patient.identifier),
+        phone: this.extractPhone(patient.telecom),
+        email: this.extractEmail(patient.telecom),
+        address: this.formatAddress(patient.address)
+      };
+    }).filter(Boolean); // Remove null entries
+
+    console.log('✅ Processed patients:', JSON.stringify(patients, null, 2));
+
+    return {
+      content: [{
+        type: 'text',
+        text: JSON.stringify({
+          success: true,
+          patientsFound: patients.length,
+          patients,
+          source: 'Epic FHIR',
+          searchParams
+        }, null, 2)
+      }]
+    };
+  } catch (error) {
+    console.error('❌ Epic search error:', error);
+    return this.handleError('searchPatients', error);
   }
+}
 
   // Tool 2: Get Patient Details
   createGetPatientTool(): Tool {
