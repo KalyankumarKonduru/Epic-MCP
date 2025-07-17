@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  epic-server:
+    build: .
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=production
+      - PORT=3003
+      - MCP_HTTP_MODE=true
+      - EPIC_CLIENT_ID=${EPIC_CLIENT_ID}
+      - EPIC_PRIVATE_KEY_PATH=/app/keys/epic-private-key.pem
+      - EPIC_FHIR_BASE_URL=${EPIC_FHIR_BASE_URL}
+    volumes:
+      - ./keys:/app/keys:ro
+      - epic_logs:/app/logs
+    restart: unless-stopped
+
+volumes:
+  epic_logs:
