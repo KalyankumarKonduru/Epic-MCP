@@ -1,8 +1,3 @@
-/**
- * Epic FHIR Tools
- * MCP tools for Epic FHIR integration - standalone server version
- */
-
 import { EpicFHIRClient } from '../services/epic-fhir-client.js';
 
 export interface Tool {
@@ -63,10 +58,6 @@ export class EpicFHIRTools {
     };
   }
 
-// Add this debug code to your handleSearchPatients method in epic-fhir-tools.ts
-
-// Update your handleSearchPatients method in epic-fhir-tools.ts
-
 async handleSearchPatients(args: {
   name?: string;
   identifier?: string;
@@ -86,9 +77,6 @@ async handleSearchPatients(args: {
     
     // Set count limit (Epic supports this)
     searchParams._count = (args.limit || 10).toString();
-    
-    // REMOVE THIS LINE - Epic doesn't support _sort for Patient search
-    // searchParams._sort = 'family';  // ❌ Remove this!
 
     console.log('🔍 Epic Search Parameters:', JSON.stringify(searchParams, null, 2));
 
@@ -116,7 +104,6 @@ async handleSearchPatients(args: {
         if (patientEntries.length === 0) {
           console.log('❌ No actual patient data found, only OperationOutcome');
           
-          // Extract issues for user feedback
           const issues = response.entry
             .filter((entry: any) => entry.resource?.resourceType === 'OperationOutcome')
             .flatMap((entry: any) => entry.resource?.issue || []);
