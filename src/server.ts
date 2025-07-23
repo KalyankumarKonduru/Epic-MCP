@@ -37,7 +37,7 @@ export class EpicMCPServer {
       clientId: process.env.EPIC_CLIENT_ID || 'not-configured',
       authType: 'jwt',
       tokenUrl: process.env.EPIC_TOKEN_URL || 'https://fhir.epic.com/interconnect-fhir-oauth/oauth2/token',
-      scope: process.env.EPIC_SCOPE || 'system/Patient.read system/Condition.read system/Encounter.read system/Observation.read system/MedicationRequest.read',
+      scope: process.env.EPIC_SCOPE || 'system/Patient.read system/Patient.write system/Condition.read system/Condition.write system/Encounter.read system/Encounter.write system/Observation.read system/Observation.write system/MedicationRequest.read system/MedicationRequest.write system/DocumentReference.read system/DocumentReference.write',
       privateKeyPath: process.env.EPIC_PRIVATE_KEY_PATH,
       // Determine if using sandbox based on configuration
       useSandbox: !process.env.EPIC_CLIENT_ID || 
@@ -85,15 +85,29 @@ export class EpicMCPServer {
         
         // Route to appropriate tool handler with epic prefix
         const toolHandlers: Record<string, () => Promise<any>> = {
-          // Epic FHIR Patient tools
+          // Epic FHIR Patient READ tools
           'epicSearchPatients': () => this.fhirTools.handleSearchPatients(args as any),
           'epicGetPatientDetails': () => this.fhirTools.handleGetPatient(args as any),
           
-          // Epic FHIR Clinical tools
+          // Epic FHIR Clinical READ tools
           'epicGetPatientObservations': () => this.fhirTools.handleGetObservations(args as any),
           'epicGetPatientMedications': () => this.fhirTools.handleGetMedications(args as any),
           'epicGetPatientConditions': () => this.fhirTools.handleGetConditions(args as any),
           'epicGetPatientEncounters': () => this.fhirTools.handleGetEncounters(args as any),
+          
+          // Epic FHIR Patient CREATE/UPDATE tools
+          'epicCreatePatient': () => this.fhirTools.handleCreatePatient(args as any),
+          'epicUpdatePatient': () => this.fhirTools.handleUpdatePatient(args as any),
+          
+          // Epic FHIR Clinical CREATE tools
+          'epicCreateObservation': () => this.fhirTools.handleCreateObservation(args as any),
+          'epicCreateMedicationRequest': () => this.fhirTools.handleCreateMedicationRequest(args as any),
+          'epicCreateCondition': () => this.fhirTools.handleCreateCondition(args as any),
+          'epicCreateEncounter': () => this.fhirTools.handleCreateEncounter(args as any),
+          
+          // Epic FHIR Document tools
+          'epicCreateClinicalNote': () => this.fhirTools.handleCreateClinicalNote(args as any),
+          'epicCreateDocumentInfo': () => this.fhirTools.handleCreateDocumentInfo(args as any),
         };
 
         const handler = toolHandlers[name];
@@ -198,6 +212,7 @@ export class EpicMCPServer {
           authMode: process.env.EPIC_PRIVATE_KEY_PATH ? 'JWT' : 'Sandbox',
           sandboxMode: this.epicClient.isUsingSandbox()
         },
+        totalTools: this.fhirTools.getAllTools().length,
         timestamp: new Date().toISOString()
       });
     });
@@ -235,12 +250,22 @@ export class EpicMCPServer {
           try {
             // Tool handlers with epic prefix
             const toolHandlers: Record<string, () => Promise<any>> = {
+              // READ tools
               'epicSearchPatients': () => this.fhirTools.handleSearchPatients(args),
               'epicGetPatientDetails': () => this.fhirTools.handleGetPatient(args),
               'epicGetPatientObservations': () => this.fhirTools.handleGetObservations(args),
               'epicGetPatientMedications': () => this.fhirTools.handleGetMedications(args),
               'epicGetPatientConditions': () => this.fhirTools.handleGetConditions(args),
               'epicGetPatientEncounters': () => this.fhirTools.handleGetEncounters(args),
+              // CREATE/UPDATE tools
+              'epicCreatePatient': () => this.fhirTools.handleCreatePatient(args),
+              'epicUpdatePatient': () => this.fhirTools.handleUpdatePatient(args),
+              'epicCreateObservation': () => this.fhirTools.handleCreateObservation(args),
+              'epicCreateMedicationRequest': () => this.fhirTools.handleCreateMedicationRequest(args),
+              'epicCreateCondition': () => this.fhirTools.handleCreateCondition(args),
+              'epicCreateEncounter': () => this.fhirTools.handleCreateEncounter(args),
+              'epicCreateClinicalNote': () => this.fhirTools.handleCreateClinicalNote(args),
+              'epicCreateDocumentInfo': () => this.fhirTools.handleCreateDocumentInfo(args),
             };
 
             const handler = toolHandlers[name];
@@ -318,17 +343,29 @@ export class EpicMCPServer {
 
   private logAvailableTools(): void {
     logger.log('\n📝 Available Epic FHIR tools:');
+    
     logger.log('\n🏥 FHIR Patient Tools (with epic prefix):');
     logger.log('   👥 epicSearchPatients - Search patients in Epic FHIR');
     logger.log('   👤 epicGetPatientDetails - Get patient information');
+    logger.log('   ➕ epicCreatePatient - Create new patient');
+    logger.log('   📝 epicUpdatePatient - Update patient data');
     
     logger.log('\n🧪 FHIR Clinical Tools (with epic prefix):');
     logger.log('   🔬 epicGetPatientObservations - Get lab results and vitals');
+    logger.log('   ➕ epicCreateObservation - Create new observation');
     logger.log('   💊 epicGetPatientMedications - Get medications');
+    logger.log('   ➕ epicCreateMedicationRequest - Create medication request');
     logger.log('   🏥 epicGetPatientConditions - Get conditions/diagnoses');
+    logger.log('   ➕ epicCreateCondition - Create new condition');
     logger.log('   📋 epicGetPatientEncounters - Get encounters/visits');
+    logger.log('   ➕ epicCreateEncounter - Create new encounter');
+    
+    logger.log('\n📄 FHIR Document Tools (with epic prefix):');
+    logger.log('   📝 epicCreateClinicalNote - Create clinical notes');
+    logger.log('   📄 epicCreateDocumentInfo - Create document references');
     
     logger.log(`\n💬 The Epic server is now listening with ${this.epicClient.isUsingSandbox() ? 'sandbox mode' : 'JWT authentication'}...`);
+    logger.log(`📊 Total available tools: ${this.fhirTools.getAllTools().length}`);
   }
 
   async stop(): Promise<void> {
